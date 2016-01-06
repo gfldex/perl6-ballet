@@ -1,0 +1,12 @@
+{
+    "perl" : "6.*",
+    "name" : "Ballet",
+    "version" : "0.1.0",
+    "description" : "Experimental Perl6ish webframework.",
+    "authors" : [ "Wenzel P. P. Peppmeyer" ],
+    "provides" : {
+        "Ballet" : "lib/ballet.pm"
+    },
+    "depends" : [ HTTP::Server::Simple ],
+    "source-url" : "git://github.com/gfldex/perl6-ballet.git"
+}
