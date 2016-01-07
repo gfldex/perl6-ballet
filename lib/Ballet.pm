@@ -80,7 +80,7 @@ my class HTTP::Server is HTTP::Server::Simple {
         my $dancer = %handlers{$method};
         my @positionals;
         my %named;
-        my @capture;
+        my $capture = [];
         with $dancer {
             when Redirector {
                 my $location = $dancer();
@@ -105,9 +105,9 @@ my class HTTP::Server is HTTP::Server::Simple {
                     for $dancer.signature.params {
                         when .positional {
                             if .type ~~ Cool { # Cool provides copy constructors from Str
-                                @capture[$param-counter++] := .type.new(@positionals[$positionals-counter]);
+                                $capture[$param-counter++] := .type.new(@positionals[$positionals-counter]);
                             } else {
-                                @capture[$param-counter++] := .type.new(|%named);
+                                $capture[$param-counter++] := .type.new(|%named);
                                 last;
                             }
                             $positionals-counter++;
@@ -115,7 +115,7 @@ my class HTTP::Server is HTTP::Server::Simple {
                         when .named {
                             X::Ballet::NamedArgumentMismatch.new(named-argument-name=>.name,dancer=>$dancer.name).throw
                             unless %named{.name}:exists;
-                            @capture[$param-counter++] = %named{.name}.kv;
+                            $capture[$param-counter++] = %named{.name}.kv;
                         }
                         when .capture {
                             X::NYI.new(feature => 'capture parameters on dancers').throw;
@@ -125,8 +125,8 @@ my class HTTP::Server is HTTP::Server::Simple {
                     last; # one run loop to the the topic set and time to think what multiple sets or parameters mean (call multiple Dancers in one go for webapi stuff?)
                 }
 
-                if Nil === any(@capture) {
-                    debug("Found Nil in @capture for $!uri");
+                if Nil === any($capture) {
+                    debug("Found Nil in capture for $!uri");
                     print "HTTP/1.0 400 Invalid Argument\x0d\x0a"; 
                     print "\x0D\x0A";
                     print "Invalid Argument\x0D\x0A";
@@ -149,7 +149,7 @@ my class HTTP::Server is HTTP::Server::Simple {
                         print "Last-Modified: $last-modified\x0D\x0A";
                     }   
                     print "\x0d\x0a";
-                    print $dancer.(|@capture.Capture), "\x0d\x0a";
+                    print $dancer.(|$capture.Capture), "\x0d\x0a";
                 }
             }
         } else {
