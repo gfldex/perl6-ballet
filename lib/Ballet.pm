@@ -138,9 +138,26 @@ my class HTTP::Server is HTTP::Server::Simple {
                                 $positionals-counter++;
                             }
                             when .named {
+                                my $type-name = .type.perl;
+                                debug %named, @positionals;
                                 X::Ballet::NamedArgumentMismatch.new(named-argument-name=>.name,dancer=>$dancer.name).throw
-                                unless %named{.name}:exists;
-                                $capture[$param-counter++] = %named{.name}.kv;
+                                unless %named{.name.substr(1)}:exists;
+                                my $pair = %named{.name.substr(1)}:p;
+                                debug $pair.value.perl;
+                                if .type ~~ Cool {
+                                    $pair.value = .type.($pair.value);
+                                } else {
+                                    try { 
+                                        $pair.value = .type.new($pair.value);
+
+                                        CATCH {
+                                            when X::TypeCheck::Assignment {
+                                                X::Ballet::FailedConstructor.new(dancer=>$dancer.name, type=>$type-name, arguments=>%named.perl).throw;
+                                            }
+                                        }
+                                    } 
+                                }
+                                $capture[$param-counter++] := $pair;
                             }
                             when .capture {
                                 X::NYI.new(feature => 'capture parameters on dancers').throw;
@@ -170,6 +187,7 @@ my class HTTP::Server is HTTP::Server::Simple {
                         print "Last-Modified: $last-modified\x0D\x0A";
                     }   
                     print "\x0d\x0a";
+                    debug $capture.perl;
                     print $dancer.(|$capture.Capture), "\x0d\x0a";
 
                     CATCH {
