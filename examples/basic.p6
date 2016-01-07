@@ -39,6 +39,8 @@ sub named-param-list ( Int :$a, Int :$b, Str :$c where /abc/ ) is dancing {
 	($a, $b, $c).perl
 }
 
+alias /'regex-test'/, &named-param-list;
+
 sub mime-test () is dancing is mime('text/text') {
 	'Hello ASCII-World!',
 	&?ROUTINE.WHAT
