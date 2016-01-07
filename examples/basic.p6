@@ -62,7 +62,7 @@ class AreaCode {
 	has Int $.code = Failure.new;
 	has Str $.country = Failure.new;
 
-	method new(:$code, :$country) {
+	method new(Int(Str) :$code, Str :$country) {
 		$country eq 'Germany' ?? self.bless(:$code, :$country) !! Nil
 	}
 }
