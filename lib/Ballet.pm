@@ -52,6 +52,8 @@ debug-dancer => sub debug-dancer () {
 } does Redirector 
 ;
 
+my %aliases{Regex};
+
 multi sub trait_mod:<is>(Routine $r, :$dancing!) is export {
     debug "add dancer {$r.name}";
     $r does Dancer;
@@ -79,6 +81,10 @@ multi sub trait_mod:<is>(Routine $r, :$redirecting) is export {
     debug "register redirector";
     $r does Redirector;
     %handlers{$r.name} = $r;
+}
+
+sub alias (Regex $matcher, &r where * ~~ Dancer) is export {
+    %aliases{$matcher} = &r;
 }
 
 my class HTTP::Server is HTTP::Server::Simple {
@@ -143,7 +149,6 @@ my class HTTP::Server is HTTP::Server::Simple {
                                 X::Ballet::NamedArgumentMismatch.new(named-argument-name=>.name,dancer=>$dancer.name).throw
                                 unless %named{.name.substr(1)}:exists;
                                 my $pair = %named{.name.substr(1)}:p;
-                                debug $pair.value.perl;
                                 if .type ~~ Cool {
                                     $pair.value = .type.($pair.value);
                                 } else {
@@ -187,7 +192,6 @@ my class HTTP::Server is HTTP::Server::Simple {
                         print "Last-Modified: $last-modified\x0D\x0A";
                     }   
                     print "\x0d\x0a";
-                    debug $capture.perl;
                     print $dancer.(|$capture.Capture), "\x0d\x0a";
 
                     CATCH {
