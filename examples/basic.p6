@@ -1,6 +1,8 @@
 use v6;
 use Ballet;
 
+class AreaCode { ... }
+
 sub index () is dancing {
 	Q:to/EOH/	
 	<html>
@@ -12,6 +14,8 @@ sub index () is dancing {
 			<a href="/mime-test">/mime-test</a><br>
 			<a href="/last-modified-test">/last-modified-test</a><br>
 			<a href="/redirection-test">/redirection-test</a><br>
+			<a href="/custom-class-test/code=04698;country=Germany">/custom-class-test</a><br>
+			<a href="/custom-class-test/code=04698;country=False">false /custom-class-test</a><br>
 		</body>
 	</html>
 	EOH
@@ -48,6 +52,19 @@ sub last-modified-test () is dancing is last-modified(&last-modified-callback) {
 
 sub redirection-test () is redirecting {
 	'https://www.youtube.com/watch?v=HVFNn_JwKhU'
+}
+
+sub custom-class-test ( AreaCode $a ) is dancing {
+	$a.perl
+}
+
+class AreaCode {
+	has Int $.code = Failure.new;
+	has Str $.country = Failure.new;
+
+	method new(:$code, :$country) {
+		$country eq 'Germany' ?? self.bless(:$code, :$country) !! Nil
+	}
 }
 
 server.run;
