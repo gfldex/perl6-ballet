@@ -15,6 +15,12 @@ role Redirector[ $url = '/not-found-404' ] is export {
     has $.url is rw = $url;
 }
 
+class X::Ballet::NamedArgumentMismatch is Exception {
+    has Str $.dancer;
+    has Str $.named-argument-name;
+    method message(){ "Could not find argument: $.named-argument-name in $.dancer" };
+}
+
 my %handlers{Str} = # Str $matcher => Dancer|Redirector &routine
     ### Predefined Dancers
     # We have to mixin the role by hand because the trait isn't available until the module has been compiled (or somesuch).
@@ -30,7 +36,7 @@ my %handlers{Str} = # Str $matcher => Dancer|Redirector &routine
         '/index' 
     } does Redirector 
 ;
- 
+
 multi sub trait_mod:<is>(Routine $r, :$dancing!) is export {
     debug "add dancer {$r.name}";
     $r does Dancer;
@@ -74,6 +80,7 @@ my class HTTP::Server is HTTP::Server::Simple {
         my $dancer = %handlers{$method};
         my @positionals;
         my %named;
+        my @capture;
         with $dancer {
             when Redirector {
                 my $location = $dancer();
@@ -85,38 +92,66 @@ my class HTTP::Server is HTTP::Server::Simple {
             }
             when Dancer {
                 for $!uri.split('/')[2..*] {
-                    my $sig-pos = 0;
                     for .split(';') {
                         if (my @parts = .split('=')).elems > 1 {
-                            my $type = $dancer.signature.params[$sig-pos].type.perl;
-                            %named.push(@parts[0], @parts[1]."$type"()); # This will change the value to a list if named arguments occur twice or more.
+                            %named.push(@parts[0], @parts[1]); # This will change the value to a list if named arguments occur twice or more.
                         } else {
-                            my $type = $dancer.signature.params[$sig-pos].type;
-                            @positionals.push: |(.item."$type"());
+                            @positionals.push: |(.item);
                         }
-                        $sig-pos++;
+                    }
+
+                    my int $param-counter = 0;
+                    my int $positionals-counter = 0;
+                    for $dancer.signature.params {
+                        when .positional {
+                            if .type ~~ Cool { # Cool provides copy constructors from Str
+                                @capture[$param-counter++] := .type.new(@positionals[$positionals-counter]);
+                            } else {
+                                @capture[$param-counter++] := .type.new(|%named);
+                                last;
+                            }
+                            $positionals-counter++;
+                        }
+                        when .named {
+                            X::Ballet::NamedArgumentMismatch.new(named-argument-name=>.name,dancer=>$dancer.name).throw
+                            unless %named{.name}:exists;
+                            @capture[$param-counter++] = %named{.name}.kv;
+                        }
+                        when .capture {
+                            X::NYI.new(feature => 'capture parameters on dancers').throw;
+                        }
+                        $param-counter++;
                     }
                     last; # one run loop to the the topic set and time to think what multiple sets or parameters mean (call multiple Dancers in one go for webapi stuff?)
                 }
-                
-                my $content-type = $dancer.returns-mime;
-                print "HTTP/1.0 200 OK\x0d\x0a";
-                print "Content-Type: $content-type\x0d\x0a";
-                with .last-modified.($dancer).utc {
-                    my $last-modified = sprintf('%s, %02d %s %04d %02d:%02d:%02d GMT', 
-                    <- Mon Tue Wed Thu Fri Sat Sun>[.day-of-week],
-                    .day, 
-                    <- Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec>[.month],
-                    .year,
-                    .hour,
-                    .minute,
-                    .second
-                );
-                print "Last-Modified: $last-modified\x0D\x0A";
-            }   
-            print "\x0d\x0a";
-            print $dancer.(|@positionals, |%named), "\x0d\x0a";
-        }
+
+                if Nil === any(@capture) {
+                    debug("Found Nil in @capture for $!uri");
+                    print "HTTP/1.0 400 Invalid Argument\x0d\x0a"; 
+                    print "\x0D\x0A";
+                    print "Invalid Argument\x0D\x0A";
+                } else {
+
+                    my $content-type = $dancer.returns-mime;
+                    print "HTTP/1.0 200 OK\x0d\x0a";
+                    print "Content-Type: $content-type\x0d\x0a";
+                    with .last-modified.($dancer).utc {
+                        my $last-modified = sprintf(
+                            '%s, %02d %s %04d %02d:%02d:%02d GMT', 
+                            <- Mon Tue Wed Thu Fri Sat Sun>[.day-of-week],
+                            .day, 
+                            <- Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec>[.month],
+                            .year,
+                            .hour,
+                            .minute,
+                            .second
+                        );
+                        print "Last-Modified: $last-modified\x0D\x0A";
+                    }   
+                    print "\x0d\x0a";
+                    print $dancer.(|@capture.Capture), "\x0d\x0a";
+                }
+            }
         } else {
             print "HTTP/1.0 404 Not Found\x0D\x0A";
             print "Content-Type: text/text\x0D\x0A";
