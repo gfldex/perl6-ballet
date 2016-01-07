@@ -2,6 +2,7 @@ use v6;
 use Ballet;
 
 class AreaCode { ... }
+class Letter { ... }
 
 sub index () is dancing {
 	Q:to/EOH/	
@@ -16,6 +17,8 @@ sub index () is dancing {
 			<a href="/redirection-test">/redirection-test</a><br>
 			<a href="/custom-class-test/code=04698;country=Germany">/custom-class-test</a><br>
 			<a href="/custom-class-test/code=04698;country=False">false /custom-class-test</a><br>
+			<a href="/default-constructor-test/from=Me;to=Her">/default-constructor-test</a><br>
+			<a href="/default-constructor-test/from=;to=Her">false /default-constructor-test</a><br>
 		</body>
 	</html>
 	EOH
@@ -58,6 +61,10 @@ sub custom-class-test ( AreaCode $a ) is dancing {
 	$a.perl
 }
 
+sub default-constructor-test ( Letter $a ) is dancing {
+	$a.perl
+}
+
 class AreaCode {
 	has Int $.code = Failure.new;
 	has Str $.country = Failure.new;
@@ -65,6 +72,11 @@ class AreaCode {
 	method new(Int(Str) :$code, Str :$country) {
 		$country eq 'Germany' ?? self.bless(:$code, :$country) !! Nil
 	}
+}
+
+class Letter {
+	has Str $.from where /\w+/;
+	has Str $.to where /\w+/;
 }
 
 server.run;
