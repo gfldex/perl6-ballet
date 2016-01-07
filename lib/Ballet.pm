@@ -36,6 +36,8 @@ class X::Ballet::NilCapture is X::Ballet {
     method message() { "Found Nil in $.capture for $.uri in $.dancer" }
 }
 
+my %aliases{Regex};
+
 my %handlers{Str} = # Str $matcher => Dancer|Redirector &routine
 ### Predefined Dancers
 # We have to mixin the role by hand because the trait isn't available until the module has been compiled (or somesuch).
@@ -45,14 +47,12 @@ not-found_404 => sub not-found_404 () {
 } does Dancer,
 # TODO disable the following or provide option
 debug-dancer => sub debug-dancer () {
-    %handlers.Str 
+    %handlers.Str ~ "\n" ~ %aliases.Str
 } does Dancer,
 '/' => sub root () { 
     '/index' 
 } does Redirector 
 ;
-
-my %aliases{Regex};
 
 multi sub trait_mod:<is>(Routine $r, :$dancing!) is export {
     debug "add dancer {$r.name}";
