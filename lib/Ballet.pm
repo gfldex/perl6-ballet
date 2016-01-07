@@ -14,27 +14,42 @@ role Dancer[ $mime-type = $default-content-type ] is export {
 role Redirector[ $url = '/not-found-404' ] is export {
     has $.url is rw = $url;
 }
+class X::Ballet is Exception {};
 
-class X::Ballet::NamedArgumentMismatch is Exception {
+class X::Ballet::NamedArgumentMismatch is X::Ballet {
     has Str $.dancer;
     has Str $.named-argument-name;
-    method message(){ "Could not find argument: $.named-argument-name in $.dancer" };
+    method message(){ "Could not find argument: $.named-argument-name in $.dancer" }
+}
+
+class X::Ballet::FailedConstructor is X::Ballet {
+    has Str $.dancer;
+    has Str $.type;
+    has Str $.arguments;
+    method message(){ "Could not create $.type with $.arguments in $.dancer" }
+}
+
+class X::Ballet::NilCapture is X::Ballet {
+    has Str $.dancer;
+    has Str $.capture;
+    has Str $.uri;
+    method message() { "Found Nil in $.capture for $.uri in $.dancer" }
 }
 
 my %handlers{Str} = # Str $matcher => Dancer|Redirector &routine
-    ### Predefined Dancers
-    # We have to mixin the role by hand because the trait isn't available until the module has been compiled (or somesuch).
+### Predefined Dancers
+# We have to mixin the role by hand because the trait isn't available until the module has been compiled (or somesuch).
 
-    not-found_404 => sub not-found_404 () {
-        "===SORRY===\nCamelia could not find your page"
-    } does Dancer,
+not-found_404 => sub not-found_404 () {
+    "===SORRY===\nCamelia could not find your page"
+} does Dancer,
 # TODO disable the following or provide option
-    debug-dancer => sub debug-dancer () {
-        %handlers.Str 
-    } does Dancer,
-    '/' => sub root () { 
-        '/index' 
-    } does Redirector 
+debug-dancer => sub debug-dancer () {
+    %handlers.Str 
+} does Dancer,
+'/' => sub root () { 
+    '/index' 
+} does Redirector 
 ;
 
 multi sub trait_mod:<is>(Routine $r, :$dancing!) is export {
@@ -53,8 +68,8 @@ multi sub trait_mod:<is>(Dancer $r, :$mime!) is export {
 
 multi sub trait_mod:<is>(Dancer $r, Callable :$last-modified!) is export {
     die "callback for last-modified needs to have the signature :(Dancer &r --> DateTime)" 
-        unless $last-modified.signature.returns ~~ DateTime;
-    
+    unless $last-modified.signature.returns ~~ DateTime;
+
     debug "add last-modified callback for {$r.name}";
     $r.last-modified = $last-modified;
 }
@@ -91,46 +106,52 @@ my class HTTP::Server is HTTP::Server::Simple {
                 print "please go to: { $location }\x0D\x0A";
             }
             when Dancer {
-                for $!uri.split('/')[2..*] {
-                    for .split(';') {
-                        if (my @parts = .split('=')).elems > 1 {
-                            %named.push(@parts[0], @parts[1]); # This will change the value to a list if named arguments occur twice or more.
-                        } else {
-                            @positionals.push: |(.item);
-                        }
-                    }
-
-                    my int $param-counter = 0;
-                    my int $positionals-counter = 0;
-                    for $dancer.signature.params {
-                        when .positional {
-                            if .type ~~ Cool { # Cool provides copy constructors from Str
-                                $capture[$param-counter++] := .type.new(@positionals[$positionals-counter]);
+                try {
+                    for $!uri.split('/')[2..*] {
+                        for .split(';') {
+                            if (my @parts = .split('=')).elems > 1 {
+                                %named.push(@parts[0], @parts[1]); # This will change the value to a list if named arguments occur twice or more.
                             } else {
-                                $capture[$param-counter++] := .type.new(|%named);
-                                last;
+                                @positionals.push: |(.item);
                             }
-                            $positionals-counter++;
                         }
-                        when .named {
-                            X::Ballet::NamedArgumentMismatch.new(named-argument-name=>.name,dancer=>$dancer.name).throw
-                            unless %named{.name}:exists;
-                            $capture[$param-counter++] = %named{.name}.kv;
-                        }
-                        when .capture {
-                            X::NYI.new(feature => 'capture parameters on dancers').throw;
-                        }
-                        $param-counter++;
-                    }
-                    last; # one run loop to the the topic set and time to think what multiple sets or parameters mean (call multiple Dancers in one go for webapi stuff?)
-                }
 
-                if Nil === any($capture) {
-                    debug("Found Nil in capture for $!uri");
-                    print "HTTP/1.0 400 Invalid Argument\x0d\x0a"; 
-                    print "\x0D\x0A";
-                    print "Invalid Argument\x0D\x0A";
-                } else {
+                        my int $param-counter = 0;
+                        my int $positionals-counter = 0;
+                        for $dancer.signature.params {
+                            when .positional {
+                                my $type-name = .type.perl;
+                                if .type ~~ Cool { # Cool provides copy constructors from Str
+                                    $capture[$param-counter++] := .type.new(@positionals[$positionals-counter]);
+                                } else {
+                                    try { 
+                                        $capture[$param-counter++] := .type.new(|%named); 
+
+                                        CATCH {
+                                            when X::TypeCheck::Assignment {
+                                                X::Ballet::FailedConstructor.new(dancer=>$dancer.name, type=>$type-name, arguments=>%named.perl).throw;
+                                            }
+                                        }
+                                    }
+                                    last;
+                                }
+                                $positionals-counter++;
+                            }
+                            when .named {
+                                X::Ballet::NamedArgumentMismatch.new(named-argument-name=>.name,dancer=>$dancer.name).throw
+                                unless %named{.name}:exists;
+                                $capture[$param-counter++] = %named{.name}.kv;
+                            }
+                            when .capture {
+                                X::NYI.new(feature => 'capture parameters on dancers').throw;
+                            }
+                            $param-counter++;
+                        }
+                        last; # one run loop to the the topic set and time to think what multiple sets or parameters mean (call multiple Dancers in one go for webapi stuff?)
+                    }
+
+                    X::Ballet::NilCapture.new(dancer => $dancer.name, uri => $!uri, capture => $capture.perl).throw
+                    if Nil === any($capture.flat);
 
                     my $content-type = $dancer.returns-mime;
                     print "HTTP/1.0 200 OK\x0d\x0a";
@@ -150,6 +171,16 @@ my class HTTP::Server is HTTP::Server::Simple {
                     }   
                     print "\x0d\x0a";
                     print $dancer.(|$capture.Capture), "\x0d\x0a";
+
+                    CATCH {
+                        when X::Ballet {
+                            debug .message;
+                            print "HTTP/1.0 400 Invalid Argument\x0d\x0a"; 
+                            print "\x0D\x0A";
+                            print "Invalid Argument\x0D\x0A";
+
+                        }
+                    }
                 }
             }
         } else {
@@ -171,7 +202,7 @@ my $server;
 sub server () is export { $server }
 
 INIT {
-   $server = HTTP::Server.new('', 8080);
+    $server = HTTP::Server.new('', 8080);
 }
 
 # vim: expandtab shiftwidth=4 ft=perl6
