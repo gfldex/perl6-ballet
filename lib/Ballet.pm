@@ -47,7 +47,9 @@ not-found_404 => sub not-found_404 () {
 } does Dancer,
 # TODO disable the following or provide option
 debug-dancer => sub debug-dancer () {
-    %handlers.Str ~ "\n" ~ %aliases.Str
+    '<html><body>'
+    ~ %handlers.pairs.map('<pre>' ~ *.gist ~ '</pre>' ) ~  '<br><br>' ~ %aliases.pairs.map('<pre>' ~ *.gist ~ '</pre>')
+    ~ '</body></html>'
 } does Dancer,
 '/' => sub root () { 
     '/index' 
