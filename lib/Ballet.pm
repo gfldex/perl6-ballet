@@ -98,9 +98,18 @@ my class HTTP::Server is HTTP::Server::Simple {
 
     method handle_request () {
         debug "handling URL: $!uri";
-        my $method = $!uri.split('/')[1] || '/';
-        debug "handling method: «$method»";
-        my $dancer = %handlers{$method};
+        my $dancer;
+        my $method;
+        if $!uri ~~ any(%aliases.keys) {
+            my @alias = %aliases.pairs.grep:{?$_.key.ACCEPTS($!uri)}; 
+            debug "matched alises: ", @alias.perl;
+            $dancer = @alias[0].value;
+            $method = @alias[0].value.name;
+        } else {
+            $method = $!uri.split('/')[1] || '/';
+            $dancer = %handlers{$method};
+            debug "handling method: «$method»";
+        }
         my @positionals;
         my %named;
         my $capture = [];
@@ -212,7 +221,7 @@ my class HTTP::Server is HTTP::Server::Simple {
             print "Content-Type: text/text\x0D\x0A";
             print "\x0D\x0A";
             %handlers<not-found_404>.();
-            note "404 $method";
+            debug "404 $method";
         }
     }
 
