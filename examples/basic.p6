@@ -12,6 +12,7 @@ sub index () is dancing {
 			Hello static world!<br>
 			<a href="/simple-named-param/a=10">/simple-named-param</a><br>
 			<a href="/named-param-list/a=10;b=10;c=abc">/named-param-list</a><br>
+			<a href="/regex-test/a=10;b=10;c=abc">alias test</a><br>
 			<a href="/mime-test">/mime-test</a><br>
 			<a href="/last-modified-test">/last-modified-test</a><br>
 			<a href="/redirection-test">/redirection-test</a><br>
